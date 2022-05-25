@@ -116,7 +116,7 @@ export class RecordSearchComponent implements OnInit, OnChanges, OnDestroy {
     itemHeaders?: any,
     aggregationsName?: any,
     aggregationsOrder?: Array<string>,
-    aggregationsExpand?: Array<string>,
+    aggregationsExpand?: Array<string> | (() => Array<string>),
     aggregationsBucketSize?: number,
     showSearchInput?: boolean,
     pagination?: {
@@ -272,7 +272,11 @@ export class RecordSearchComponent implements OnInit, OnChanges, OnDestroy {
           return this._config.aggregationsOrder.pipe(
             tap((aggregations: string[]) => {
               this.aggregations = aggregations.map((key: any) => {
-                const expanded = (this._config.aggregationsExpand || []).includes(key);
+                let aggregationsExpandCfg = this._config.aggregationsExpand;
+                if (typeof aggregationsExpandCfg === 'function') {
+                  aggregationsExpandCfg = aggregationsExpandCfg();
+                }
+                const expanded = (aggregationsExpandCfg || []).includes(key);
                 return {
                   key: key.key || key,
                   bucketSize: this._config.aggregationsBucketSize || null,
@@ -292,15 +296,14 @@ export class RecordSearchComponent implements OnInit, OnChanges, OnDestroy {
 
           // Apply filters
           this.aggregations$(records.aggregations).subscribe((aggregations: any) => {
-            this.aggregations.forEach((agg: Aggregation) => {
-              // Mark all aggregations as not loaded.
+            for (const agg of this.aggregations) {
+              // reset aggregations
               agg.loaded = false;
               agg.value.buckets = [];
-              const recordsAggregationKey = Object.keys(aggregations).find((key: string) => key === agg.key);
-              if (recordsAggregationKey) {
-                this._mapAggregation(agg, aggregations[recordsAggregationKey]);
+              if (agg.key in aggregations) {
+                this._mapAggregation(agg, aggregations[agg.key]);
               }
-            });
+            }
           });
 
           this._emitNewParameters();
@@ -722,16 +725,6 @@ export class RecordSearchComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   /**
-   * Show or hide facet section
-   * @param key facet key
-   * @return Boolean
-   */
-  expandFacet(key: string): boolean {
-    const expandConfig = ('aggregationsExpand' in this._config) ? this._config.aggregationsExpand : [];
-    return expandConfig.includes(key);
-  }
-
-  /**
    * Check if a record can be updated
    * @param record - object, record to check
    * @return Observable
@@ -1116,7 +1109,33 @@ export class RecordSearchComponent implements OnInit, OnChanges, OnDestroy {
     if (recordsAggregation.doc_count != null) {
       aggregation.doc_count = recordsAggregation.doc_count;
     }
+    aggregation.value.buckets.map(bucket => this.processBuckets(bucket, aggregation.key));
     aggregation.loaded = true;
+  }
+
+  /**
+   * Enrich the bucket with several properties: indeterminate, parent, aggregationKey.
+   *
+   * @param bucket elastic bucket to process
+   * @param aggregationKey bucket parent key
+   * @returns the indeterninate state of the bucket
+   */
+  processBuckets(bucket, aggregationKey): boolean {
+    // checkbox indeterminate state
+    bucket.indeterminate = false;
+    for (const k in bucket) {
+      if (bucket[k] && bucket[k].buckets) {
+        for (const childBucket of bucket[k].buckets) {
+          // store the parent: usefull to remove parent filters
+          childBucket.parent = bucket;
+          // store the aggregation key as we re-organize the bucket structure
+          bucket.aggregationKey = aggregationKey;
+          bucket.indeterminate ||= this._recordSearchService.hasFilter(k, childBucket.key);
+          bucket.indeterminate = this.processBuckets(childBucket, k) || bucket.indeterminate;
+        }
+      }
+    }
+    return bucket.indeterminate;
   }
 
   /**

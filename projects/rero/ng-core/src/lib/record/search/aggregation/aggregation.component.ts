@@ -16,6 +16,7 @@
  */
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { Aggregation } from '../../record';
+import { RecordSearchService } from '../record-search.service';
 
 @Component({
   selector: 'ng-core-record-search-aggregation',
@@ -41,6 +42,8 @@ export class RecordSearchAggregationComponent {
     const aggregationFilters = this.aggregationsFilters.find((item: any) => item.key === this.aggregation.key);
     return aggregationFilters === undefined ? [] : aggregationFilters.values;
   }
+
+  constructor(private _recordSearchService: RecordSearchService) {}
 
   /**
    * Display buckets for the aggregation or not.
