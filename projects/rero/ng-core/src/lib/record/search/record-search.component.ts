@@ -293,7 +293,6 @@ export class RecordSearchComponent implements OnInit, OnChanges, OnDestroy {
         (records: Record) => {
           this.hits = records.hits;
           this._spinner.hide();
-
           // Apply filters
           this.aggregations$(records.aggregations).subscribe((aggregations: any) => {
             for (const agg of this.aggregations) {
@@ -305,7 +304,8 @@ export class RecordSearchComponent implements OnInit, OnChanges, OnDestroy {
               }
             }
           });
-
+          // Required to fire onChange event
+          this.aggregations = [...this.aggregations];
           this._emitNewParameters();
           this.recordsSearched.emit({ type: this.currentType, records });
         },
@@ -890,6 +890,8 @@ export class RecordSearchComponent implements OnInit, OnChanges, OnDestroy {
         if (aggregations[event.key]) {
           this._mapAggregation(aggregation, aggregations[event.key]);
         }
+        // Required to fire onChange event
+        this.aggregations = [...this.aggregations];
         this._spinner.hide();
       });
 
@@ -1131,12 +1133,12 @@ export class RecordSearchComponent implements OnInit, OnChanges, OnDestroy {
   processBuckets(bucket, aggregationKey): boolean {
     // checkbox indeterminate state
     bucket.indeterminate = false;
+    bucket.aggregationKey = aggregationKey;
     for (const k of Object.keys(bucket).filter(key => bucket[key].buckets)) {
       for (const childBucket of bucket[k].buckets) {
           // store the parent: usefull to remove parent filters
           childBucket.parent = bucket;
           // store the aggregation key as we re-organize the bucket structure
-          bucket.aggregationKey = aggregationKey;
           bucket.indeterminate ||= this._recordSearchService.hasFilter(k, childBucket.key);
           // do not change the order of the boolean expression to force processBucket over all
           // recursion steps
