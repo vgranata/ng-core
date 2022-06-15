@@ -126,7 +126,7 @@ export class RecordSearchService {
    * @param key filter name
    * @param value filter value
    */
-  removeFilter(key, value) {
+  removeFilter(key, value, emit = false) {
     const filter = this._aggregationsFilters.find(item => item.key === key);
     if (filter) {
       filter.values = filter.values.filter(item => item !== value);
@@ -134,6 +134,9 @@ export class RecordSearchService {
       if (filter.values.length === 0) {
         this._aggregationsFilters = this._aggregationsFilters.filter(item => item.key !== filter.key);
       }
+    }
+    if (emit) {
+      this._aggregationsFiltersSubject.next(cloneDeep(this._aggregationsFilters));
     }
   }
 
